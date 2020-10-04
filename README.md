@@ -82,7 +82,7 @@ python train.py -c modules/mstcn/config/config_tcn.yml
 
 # Contact
 
-For any problems and question please open an [Issue](https://gitlab.lrz.de/CAMP_IFL/tecno/-/issues/new)
+For any problems and question please open an [Issue](https://github.com/tobiascz/TeCNO/issues/new/choose)
 
 
 [1.2]: http://i.imgur.com/wWzX9uB.png (twitter icon without padding)
