@@ -7,7 +7,7 @@
      
 1. [**About**](#about)
 2. [**Getting started**](#getting-started)
-     1. [**Prerequisities**](#prerequisities)
+     1. [**Prerequisites**](#prerequisites)
      2. [**Usage**](#usage)
 3. [**Reference**](#reference)
 4. [**Contact**](#contact)
@@ -28,7 +28,7 @@ Link to paper: [**TeCNO Paper**](https://arxiv.org/abs/2003.10751)
 # Getting started
 Follow these steps to get the code running on your local machine!
 
-## Prerequisities
+## Prerequisites
 
 ```
 pip install -r requirements.txt
