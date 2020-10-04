@@ -1,0 +1,39 @@
+version: 1
+kind: group
+build:
+  image: 'pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime'
+  build_steps:
+    - apt update
+    - apt install -y libglib2.0-0 libsm6 libxext6 libxrender-dev
+    - pip install -r requirements.txt
+hptuning:
+  concurrency: 3
+  matrix:
+    model:
+      values:
+        - --model=cholec_fe_models.twoHeadEndoNet --output_mode=2 --name=PhaseToolEndonet_cholec_v1 --resume_from_checkpoint=/outputs/tobiascz/Cholec80_FeatureExtraction/groups/1664/125493/Cholec_fe_module_Cholec80Dataset_twoHeadEndoNet/version_0/checkpoints/CKPT_Cholec_fe_module_Cholec80Dataset_twoHeadEndoNet_v0_ckpt_epoch_21.ckpt
+        - --model=cholec_fe_models.twoHeadResNet50model --output_mode=1 --name=PhaseResNet50_cholec_v1 --resume_from_checkpoint=/outputs/tobiascz/Cholec80_FeatureExtraction/groups/1664/125496/Cholec_fe_module_Cholec80Dataset_twoHeadResNet50model/version_0/checkpoints/CKPT_Cholec_fe_module_Cholec80Dataset_twoHeadResNet50model_v0_ckpt_epoch_3.ckpt
+        #- --model=cholec_fe_models.twoHeadResNet50model --output_mode=2 --name=PhaseToolResNet50_cholec_v1
+        #- --model=cholec_fe_models.twoHeadDenseModel --output_mode=1 --name=PhaseDenseNet_cholec_v1
+        #- --model=cholec_fe_models.twoHeadDenseModel --output_mode=2 --name=PhaseToolDenseNet_cholec_v1
+        #- --model=cholec_fe_models.twoHeadAlexNet --output_mode=1 --name=PhaseAlexNet_cholec_v1
+        #- --model=cholec_fe_models.twoHeadAlexNet --output_mode=2 --name=PhaseToolAlexNet_cholec_v1
+
+environment:
+  resources:
+    cpu:
+      requests: 4
+      limits: 4
+    memory:
+      requests: 8192
+    gpu:
+      requests: 1
+      limits: 1
+params:
+  data_root: /data
+  resume_from_checkpoint: /outputs/tobiascz/Cholec80_FeatureExtraction/groups/1664/125493/Cholec_fe_module_Cholec80Dataset_twoHeadEndoNet/version_0/CKPT_Cholec_fe_module_Cholec80Dataset_twoHeadEndoNet_v0_ckpt_epoch_21.ckpt
+run:
+  cmd:
+    - python test.py -c modules/surgicalwf/cnn/test/TEST_config_featureExtract.yml {{model}} --data_root={{ data_root }} --on_polyaxon
+
+

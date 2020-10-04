@@ -1,0 +1,22 @@
+module : surgicalwf.cnn.cholec_fe_module.Cholec_fe_module
+model : cholec_fe_models.twoHeadResNet50model
+data_root : /home/tobiascz/Datasets
+dataset : cholec80.Cholec80Dataset
+out_features : 7
+input_height : 224
+input_width : 224
+batch_size : 1000
+fps_sampling : 5
+max_epochs : 1
+min_epochs : 1
+dataset_mode : img_multilabel_and_extract
+early_stopping_metric : val_acc_phase
+pretrained : False
+save_top_k : 1
+output_mode : 1
+resume_from_checkpoint : /mnt/polyaxon/outputs1/tobiascz/Cholec80_FeatureExtraction/groups/1999/128514/PhaseToolResNet50_cholec_v1_run1/version_0/checkpoints/CKPT_PhaseToolResNet50_cholec_v1_run1_v0_ckpt_epoch_9.ckpt
+  #/mnt/polyaxon/outputs1/tobiascz/Cholec80_FeatureExtraction/groups/1999/128515/PhaseToolResNet50_cholec_v1_run2/version_0/checkpoints/CKPT_PhaseToolResNet50_cholec_v1_run2_v0_ckpt_epoch_6.ckpt
+#/mnt/polyaxon/outputs1/tobiascz/Cholec80_FeatureExtraction/groups/1807/126256/PhaseToolResNet50_cholec_v1/version_0/checkpoints/CKPT_PhaseToolResNet50_cholec_v1_v0_ckpt_epoch_6.ckpt
+#resume_from_checkpoint : /mnt/polyaxon/outputs1/tobiascz/Cholec80_FeatureExtraction/groups/1807/126252/PhaseAlexNet_cholec_v1/version_0/checkpoints/CKPT_PhaseAlexNet_cholec_v1_v0_ckpt_epoch_18.ckpt
+#train_percent_check: 0.01 #THose 2 comment before plx
+#val_percent_check: 0.01

@@ -1,0 +1,9 @@
+torchvision
+pytorch-lightning==0.8.5
+pandas==1.0.3
+scikit-learn==0.23.1
+opencv-python
+ConfigArgParse
+torchsummary==1.5.1
+pycm==2.7
+albumentations==0.4.5

@@ -1,0 +1,22 @@
+module : mstcn.tecno.TeCNO
+model : mstcn.MultiStageModel
+dataset : cholec80.Cholec80
+out_features : 7
+num_workers : 3
+batch_size : 1
+features_per_seconds : 25
+features_subsampling : 1
+mstcn_causal_conv : True
+learning_rate : 0.00007
+min_epochs : 12
+max_epochs : 12
+mstcn_layers : 9
+mstcn_f_maps : 45
+mstcn_f_dim: 2048
+mstcn_stages : 2
+early_stopping_metric : val_acc_c
+save_top_k : 1
+gpus : '1'
+data_root : /home/tobiascz/Datasets/cholec80_pickle_export/cholec80_pickle_export
+num_sanity_val_steps: 0
+

@@ -1,0 +1,22 @@
+module : cnn.feature_extraction.FeatureExtraction
+model : cnn.TwoHeadResNet50Model
+data_root : /mnt/polyaxon/data1
+dataset : cholec80_feature_extract.Cholec80FeatureExtract
+out_features : 7
+input_height : 224
+input_width : 224
+batch_size : 1000
+fps_sampling : 0.1
+fps_sampling_test : 0.1
+learning_rate : 0.0005
+dataset_mode : img_multilabel
+early_stopping_metric : val_acc_phase
+pretrained : True
+save_top_k : 1
+max_epochs : 20 # 30
+min_epochs : 1 # 20
+num_workers : 4
+num_tasks : 2
+num_sanity_val_steps : 0
+test_extract : True
+
