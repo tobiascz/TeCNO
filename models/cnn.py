@@ -32,7 +32,7 @@ class TwoHeadResNet50Model(nn.Module):
                                                  action="store_true",
                                                  help="pretrained on imagenet")
         resnet50model_specific_args.add_argument(
-            "--model_specific_batch_size_max", type=int, default=60)
+            "--model_specific_batch_size_max", type=int, default=80)
         return parser
 
 

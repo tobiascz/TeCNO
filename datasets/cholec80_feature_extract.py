@@ -11,7 +11,6 @@ from albumentations import (
     Normalize,
     ShiftScaleRotate,
 )
-from utils.dataset_utils import Dataset_from_Dataframe
 import torch
 
 class Cholec80FeatureExtract:
@@ -84,7 +83,7 @@ class Cholec80FeatureExtract:
         if self.fps_sampling < 25 and self.fps_sampling > 0:
             factor = int(25 / self.fps_sampling)
             print(
-                f"Subsampling data: 25fps --> {self.fps_sampling}fps (factor: {factor})"
+                f"Subsampling(factor: {factor}) data: 25fps > {self.fps_sampling}fps"
             )
             self.df["train"] = self.df["train"].iloc[::factor]
             self.df["val"] = self.df["val"].iloc[::factor]
@@ -95,28 +94,18 @@ class Cholec80FeatureExtract:
         if hparams.fps_sampling_test < 25 and self.fps_sampling_test > 0:
             factor = int(25 / self.fps_sampling_test)
             print(
-                f"Subsampling data: 25fps --> {self.fps_sampling}fps (factor: {factor})"
+                f"Subsampling(factor: {factor}) data: 25fps > {self.fps_sampling}fps"
             )
             self.df["test"] = self.df["test"].iloc[::factor]
             split = "test"
             print(f"{split:>7}: {len_org[split]:8} > {len(self.df[split])}")
 
         self.data = {}
-        if self.dataset_mode == "img":
-            for split in ["train", "val", "test"]:
-                self.df[split] = self.df[split].reset_index()
-                self.data[split] = Dataset_from_Dataframe(
-                    self.df[split],
-                    self.transformations[split],
-                    self.label_col,
-                    img_root=self.cholec_root_dir / "output_split_all",
-                    image_path_col="image_path",
-                )
 
         if self.dataset_mode == "img_multilabel":
             for split in ["train", "val"]:
                 self.df[split] = self.df[split].reset_index()
-                self.data[split] = Dataset_from_Dataframe_multilabel(
+                self.data[split] = Dataset_from_Dataframe(
                     self.df[split],
                     self.transformations[split],
                     self.label_col,
@@ -130,7 +119,7 @@ class Cholec80FeatureExtract:
             # here we want to extract all features
             #self.df["test"] = self.df["all"].reset_index()
             self.df["test"] = self.df["test"].reset_index()
-            self.data["test"] = Dataset_from_Dataframe_multilabel(
+            self.data["test"] = Dataset_from_Dataframe(
                 self.df["test"],
                 self.transformations["test"],
                 self.label_col,
@@ -268,7 +257,7 @@ class Dataset_from_Dataframe_video_based(Dataset):
         return f_video
 
 
-class Dataset_from_Dataframe_multilabel(Dataset):
+class Dataset_from_Dataframe(Dataset):
     def __init__(self,
                  df,
                  transform,
@@ -282,7 +271,6 @@ class Dataset_from_Dataframe_multilabel(Dataset):
         self.image_path_col = image_path_col
         self.img_root = img_root
         self.add_label_cols = add_label_cols
-        self.failure_count = 3
 
     def __len__(self):
         return len(self.df)
@@ -295,23 +283,13 @@ class Dataset_from_Dataframe_multilabel(Dataset):
         return X_array, p
 
     def __getitem__(self, index):
-        for i in range(self.failure_count):
-            X_array, p = self.load_from_path(index + i)
-            test_shape = ()
-            if X_array.shape != (250, 250, 3):
-                print(f"\nerror at index: {index}")
-                print(f"Path to img: {p}")
-                print(f"x_array shape: {X_array.shape}")
-                print(f"try: {i}/{self.failure_count}")
-                print(f"Exists: {p.exists()}")
-                continue
-            if self.transform:
-                X = self.transform(image=X_array, mask=None)["image"]
-            label = torch.tensor(int(self.df[self.label_col][index]))
-            add_label = []
-            for add_l in self.add_label_cols:
-                add_label.append(self.df[add_l][index])
-            X = X.type(torch.FloatTensor)
-            return X, label, add_label
-        print("Too much loading failed ... Quitting")
-        raise ArithmeticError
+        X_array, p = self.load_from_path(index)
+        if self.transform:
+            X = self.transform(image=X_array)["image"]
+        label = torch.tensor(int(self.df[self.label_col][index]))
+        add_label = []
+        for add_l in self.add_label_cols:
+            add_label.append(self.df[add_l][index])
+        X = X.type(torch.FloatTensor)
+        return X, label, add_label
+

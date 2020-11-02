@@ -20,19 +20,13 @@ class FeatureExtraction(LightningModule):
         self.hparams = hparams
         self.batch_size = hparams.batch_size
         self.dataset = dataset
-        # get median frequency weights from dataset and put on GPU if required
-        self.class_weights = self.dataset.class_weights
-        if self.dataset.class_weights is not None and self.hparams.gpus != 0:
-            self.class_weights = torch.from_numpy(
-                self.class_weights).float().cuda()
-
         self.num_tasks = self.hparams.num_tasks  # output stem 0, output phase 1 , output phase and tool 2
         self.log_vars = nn.Parameter(torch.zeros(2))
-
         self.bce_loss = nn.BCEWithLogitsLoss()
-        self.sig_f = nn.Sigmoid().cuda()
+        self.ce_loss = nn.CrossEntropyLoss(weight=torch.from_numpy(self.dataset.class_weights).float())
+        self.sig_f = nn.Sigmoid()
         self.current_video_idx = self.dataset.df["test"].video_idx.min()
-        print(f"starting video idx for testing: {self.current_video_idx}")
+        self.init_metrics()
 
         # store model
         self.current_stems = []
@@ -44,6 +38,16 @@ class FeatureExtraction(LightningModule):
         self.test_acc_per_video = {}
         self.pickle_path = None
 
+    def init_metrics(self):
+        self.train_acc_phase = pl.metrics.Accuracy()
+        self.val_acc_phase = pl.metrics.Accuracy()
+        self.test_acc_phase = pl.metrics.Accuracy()
+        if self.num_tasks == 2:
+            self.train_acc_tool = pl.metrics.Accuracy()
+            self.val_acc_tool = pl.metrics.Accuracy()
+            self.val_f1_tool = pl.metrics.Fbeta(num_classes=7, multilabel=True)
+            self.train_f1_tool = pl.metrics.Fbeta(num_classes=7, multilabel=True)
+
     def set_export_pickle_path(self):
         self.pickle_path = self.hparams.output_path / "cholec80_pickle_export"
         self.pickle_path.mkdir(exist_ok=True)
@@ -52,33 +56,16 @@ class FeatureExtraction(LightningModule):
     # ---------------------
     # TRAINING
     # ---------------------
-    def forward(self, x):
-        if self.num_tasks == 1:
-            return self.forward_phase(x)
 
-        if self.num_tasks == 2:
-            return self.forward_phase_tool(x)
+    def forward(self,x):
+        stem, phase, tool = self.model.forward(x)
+        return stem, phase, tool
 
-    def forward_phase(self, x):
-        _, phase, _ = self.model.forward(x)
-        return phase
-
-    def forward_phase_tool(self, x):
-        _, phase, tool = self.model.forward(x)
-        return phase, tool
-
-    def forward_stem(self, x):
-        stem, phase, _ = self.model.forward(x)
-        return stem, phase
-
-    def loss_phase(self, labels, logits):
-        loss = F.cross_entropy(logits, labels, weight=self.class_weights)
-        return loss
-
-    def loss_phase_tool(self, labels_phase, labels_tool, p_phase, p_tool):
-        loss = 0
-        loss_phase = self.loss_phase(labels_phase, p_phase)
-
+    def loss_phase_tool(self, p_phase, p_tool, labels_phase, labels_tool, num_tasks):
+        loss_phase = self.ce_loss(p_phase, labels_phase)
+        if num_tasks == 1:
+            return loss_phase
+        # else
         labels_tool = torch.stack(labels_tool, dim=1)
         loss_tools = self.bce_loss(p_tool, labels_tool.data.float())
         # automatic balancing
@@ -89,148 +76,48 @@ class FeatureExtraction(LightningModule):
         loss = loss_phase_l + loss_tool_l
         return loss
 
-    def get_metrics(self,
-                    y_phase=None,
-                    y_tool=None,
-                    p_phase=None,
-                    p_tool=None,
-                    val=False):
-        metrics = {}
-        prediction_phase = torch.argmax(p_phase, dim=1)
-        val_str = ""
-        if val:
-            val_str = "val_"
-        if torch.unique(prediction_phase)[0] == torch.unique(
-                y_phase)[0] and len(torch.unique(y_phase)) == 1 and len(
-                    torch.unique(prediction_phase)) == 1:
-            acc_phase = 1.0
-            f1_phase = 1.0
-        else:
-            cm_phase = ConfusionMatrix(
-                actual_vector=y_phase.cpu().numpy(),
-                predict_vector=prediction_phase.cpu().numpy(),
-            )
-            acc_phase = cm_phase.Overall_ACC
-            f1_phase = cm_phase.F1_Micro
 
-        if type(y_tool) != type(None) and type(p_tool) != type(None):
-            sig_out = self.sig_f(p_tool)
-            preds_1 = sig_out.cpu() > 0.5
-            preds_1 = preds_1.long()
-            y_tool = torch.stack(y_tool, dim=1)
-            acc_tool = (torch.sum(preds_1 == y_tool.cpu().long()).float() /
-                        (preds_1.shape[0] * 1.0)) / 7.0
-            metrics[f"{val_str}acc_tool"] = acc_tool
-        metrics[f"{val_str}acc_phase"] = torch.tensor(acc_phase)
-        metrics[f"{val_str}f1_phase"] = torch.tensor(f1_phase)
-        return metrics
-
-    def prediction_phase(self, x, y_phase, val=False):
-        p_phase = self.forward_phase(x)
-        loss = self.loss_phase(y_phase, p_phase)
-        metrics = self.get_metrics(y_phase=y_phase, p_phase=p_phase, val=val)
-        #metrics["loss"] = loss
-        return loss, metrics
-
-    def prediction_phase_tool(self, x, y_phase, y_tool, val=False):
-        p_phase, p_tool = self.forward_phase_tool(x)
-        loss = self.loss_phase_tool(y_phase, y_tool, p_phase, p_tool)
-        metrics = self.get_metrics(y_phase=y_phase,
-                                   y_tool=y_tool,
-                                   p_phase=p_phase,
-                                   p_tool=p_tool,
-                                   val=val)
-        #metrics["loss"] = loss
-        return loss, metrics
 
     def training_step(self, batch, batch_idx):
         x, y_phase, y_tool = batch
-        if self.num_tasks == 1:
-            loss, metrics = self.prediction_phase(x, y_phase)
-        else:
-            loss, metrics = self.prediction_phase_tool(x, y_phase, y_tool)
-        log = metrics
-        log.update({"train_loss": loss})
-        output = OrderedDict({"loss": loss, "progress_bar": log, "log": log})
-        return output
+        _, p_phase, p_tool = self.forward(x)
+        loss = self.loss_phase_tool(p_phase, p_tool, y_phase, y_tool, self.num_tasks)
+        # acc_phase, acc_tool, loss
+        if self.num_tasks == 2:
+            self.train_acc_tool(p_tool, torch.stack(y_tool, dim=1))
+            self.log("train_acc_tool", self.train_acc_tool, on_epoch=True, on_step=False)
+            self.train_f1_tool(p_tool, torch.stack(y_tool, dim=1))
+            self.log("train_f1_tool", self.train_f1_tool, on_epoch=True, on_step=False)
+        self.train_acc_phase(p_phase, y_phase)
+        self.log("train_acc_phase", self.train_acc_phase, on_epoch=True, on_step=True)
+        self.log("loss", loss, prog_bar=True, logger=True, on_epoch=True, on_step=True)
+        return loss
 
-    def get_mean_metrics(self, outputs, val=False):
-        mean_metric_keys = outputs[0]["progress_bar"].keys()
-        means = {key: 0 for key in mean_metric_keys}
-        for output in outputs:
-            for key in mean_metric_keys:
-                means[key] += output["progress_bar"][key]
-        means = {key: means[key] / len(outputs) for key in mean_metric_keys}
-        if val:
-            loss_mean = np.asarray(
-                [k['val_loss'].cpu().numpy() for k in outputs]).mean()
-        else:
-            loss_mean = np.asarray([k['loss'].cpu().numpy()
-                                    for k in outputs]).mean()
-        return means, loss_mean
 
-    def training_epoch_end(self, outputs):
-        logs, train_loss_mean = self.get_mean_metrics(outputs)
-        logs.update({"train_loss_mean": train_loss_mean})
-        results = {
-            'train_loss': train_loss_mean,
-            'progress_bar': logs,
-            'log': logs
-        }
-        return results
 
     def validation_step(self, batch, batch_idx):
         x, y_phase, y_tool = batch
-        if self.num_tasks == 1:
-            val_loss, log = self.prediction_phase(x, y_phase, val=True)
-        else:
-            val_loss, log = self.prediction_phase_tool(x,
-                                                       y_phase,
-                                                       y_tool,
-                                                       val=True)
-        log.update({"val_loss": val_loss})
-        output = OrderedDict({
-            "val_loss": val_loss,
-            "progress_bar": log,
-            "log": log
-        })
-        return output
+        _, p_phase, p_tool = self.forward(x)
+        loss = self.loss_phase_tool(p_phase, p_tool, y_phase, y_tool, self.num_tasks)
+        # acc_phase, acc_tool, loss
+        if self.num_tasks == 2:
+            self.val_acc_tool(p_tool, torch.stack(y_tool, dim=1))
+            self.log("val_acc_tool", self.val_acc_tool, on_epoch=True, on_step=False)
+            self.val_f1_tool(p_tool, torch.stack(y_tool, dim=1))
+            self.log("val_f1_tool", self.val_f1_tool, on_epoch=True, on_step=False)
+        self.val_acc_phase(p_phase, y_phase)
+        self.log("val_acc_phase", self.val_acc_phase, on_epoch=True, on_step=False)
+        self.log("val_loss", loss, prog_bar=True, logger=True, on_epoch=True, on_step=False)
 
-    def validation_epoch_end(self, outputs):
-        logs, val_loss_mean = self.get_mean_metrics(outputs, val=True)
-        logs.update({"val_loss_mean": val_loss_mean})
-        result = {"val_loss": val_loss_mean, "progress_bar": logs, "log": logs}
-
-        for k, v in self.best_metrics_high.items():
-            if logs[k] > v:
-                self.best_metrics_high[k] = logs[k]
-                logs.update({k + "_best": logs[k]})
-
-        if self.hparams.on_polyaxon:
-            out_print = f"Epoch: {self.current_epoch} | "
-            for key in logs:
-                out_print += f"{key}: {float(logs[key]):.2f} | "
-            print(out_print)
-        return result
-
-    def get_phase_acc(self, true_label, pred, during_train=False):
+    def get_phase_acc(self, true_label, pred):
         pred = torch.FloatTensor(pred)
         pred_phase = torch.softmax(pred, dim=1)
-        labels_pred = torch.argmax(pred_phase, dim=1)
-        true_label = torch.IntTensor(true_label)
-        acc_phase = torch.sum(
-            true_label == labels_pred.int()).float() / (len(true_label) * 1.0)
-        if not during_train:
-            cm = ConfusionMatrix(
-                actual_vector=true_label.cpu().numpy(),
-                predict_vector=labels_pred.cpu().numpy(),
-            )
-            f1 = cm.F1_Macro
-            ppv = cm.PPV
-            tpr = cm.TPR
-            keys = cm.classes
-            return float(acc_phase.cpu().numpy()), ppv, tpr, keys, f1
-        return float(acc_phase.cpu().numpy()), 0, 0, 0, 0
+        labels_pred = torch.argmax(pred_phase, dim=1).cpu().numpy()
+        cm = ConfusionMatrix(
+            actual_vector=true_label,
+            predict_vector=labels_pred,
+        )
+        return cm.Overall_ACC, cm.PPV, cm.TPR, cm.classes, cm.F1_Macro
 
     def save_to_drive(self, vid_index):
         acc, ppv, tpr, keys, f1 = self.get_phase_acc(self.current_phase_labels,
@@ -246,7 +133,7 @@ class FeatureExtraction(LightningModule):
             )
             self.test_acc_per_video[vid_index] = acc
             print(
-                f"save video {vid_index} | acc: {acc:.4f}; ppv: {ppv}; tpr: {tpr}; keys: {keys}; f1: {f1}"
+                f"save video {vid_index} | acc: {acc:.4f} | f1: {f1}"
             )
         with open(save_path_vid, 'wb') as f:
             pickle.dump([
@@ -257,18 +144,14 @@ class FeatureExtraction(LightningModule):
 
     def test_step(self, batch, batch_idx):
 
-        x, y, (vid_idx, img_name, img_index, tool_Grasper, tool_Bipolar,
+        x, y_phase, (vid_idx, img_name, img_index, tool_Grasper, tool_Bipolar,
                tool_Hook, tool_Scissors, tool_Clipper, tool_Irrigator,
                tool_SpecimenBag) = batch
-        y = y.cpu().numpy()
         vid_idx_raw = vid_idx.cpu().numpy()
-
         with torch.no_grad():
-            stem, y_hat = self.forward_stem(x)
-
-        y_hat = np.asarray(y_hat.cpu())
-        y_hat = y_hat.squeeze()
-
+            stem, y_hat, _ = self.forward(x)
+        self.test_acc_phase(y_hat, y_phase)
+        #self.log("test_acc_phase", self.test_acc_phase, on_epoch=True, on_step=True)
         vid_idxs, indexes = np.unique(vid_idx_raw, return_index=True)
         vid_idxs = [int(x) for x in vid_idxs]
         index_next = len(vid_idx) if len(vid_idxs) == 1 else indexes[1]
@@ -285,58 +168,29 @@ class FeatureExtraction(LightningModule):
                 else:
                     index_next = indexes[i+1]  # for the unlikely case that we have 3 phases in one batch
                 self.current_video_idx = vid_idx
+            y_hat_numpy = np.asarray(y_hat.cpu()).squeeze()
             self.current_p_phases.extend(
-                np.asarray(y_hat[index:index_next, :]).tolist())
+                np.asarray(y_hat_numpy[index:index_next, :]).tolist())
             self.current_stems.extend(
                 stem[index:index_next, :].cpu().detach().numpy().tolist())
+            y_phase_numpy = y_phase.cpu().numpy()
             self.current_phase_labels.extend(
-                np.asarray(y[index:index_next]).tolist())
+                np.asarray(y_phase_numpy[index:index_next]).tolist())
 
         if (batch_idx + 1) * self.hparams.batch_size >= self.len_test_data:
             self.save_to_drive(vid_idx)
             print(f"Finished extracting all videos...")
 
-        batch_acc, _, _, _, _ = self.get_phase_acc(y, y_hat, during_train=True)
-        tensorboard_logs = {'batch_idx': batch_idx}
-        return {'test_acc': batch_acc, 'log': tensorboard_logs}
+
 
     def test_epoch_end(self, outputs):
-        mean_metric_keys = ["test_acc"]
-        means = {key: 0 for key in mean_metric_keys}
-        for output in outputs:
-            for key in mean_metric_keys:
-                means[key] += output[key]
-        means = {key: means[key] / len(outputs) for key in mean_metric_keys}
-
-
-        means["test_acc_train"] = np.mean(
-            np.asarray([
-                self.test_acc_per_video[x]
-                for x in self.dataset.vids_for_training
-            ]))
-        means["test_acc_val"] = np.mean(
-            np.asarray([
-                self.test_acc_per_video[x]
-                for x in self.dataset.vids_for_val
-            ]))
-        means["test_acc_test"] = np.mean(
-            np.asarray([
-                self.test_acc_per_video[x]
-                for x in self.dataset.vids_for_test
-            ]))
-
-
-        print(f"Done Extracting the overall acc is: {means['test_acc']:.2f}")
-
-        result = {
-            "test_acc_phase_all": means["test_acc"],
-            "test_acc_vid_testset": means["test_acc_test"],
-            "test_acc_vid_valset": means["test_acc_val"],
-            "test_acc_vid_trainset": means["test_acc_train"],
-        }
-
-        return result
-
+        self.log("test_acc_train", np.mean(np.asarray([self.test_acc_per_video[x]for x in
+                                                       self.dataset.vids_for_training])))
+        self.log("test_acc_val", np.mean(np.asarray([self.test_acc_per_video[x]for x in
+                                                     self.dataset.vids_for_val])))
+        self.log("test_acc_test", np.mean(np.asarray([self.test_acc_per_video[x] for x in
+                                                      self.dataset.vids_for_test])))
+        self.log("test_acc", float(self.test_acc_phase.compute()))
     # ---------------------
     # TRAINING SETUP
     # ---------------------
@@ -352,10 +206,6 @@ class FeatureExtraction(LightningModule):
 
     def __dataloader(self, split=None):
         dataset = self.dataset.data[split]
-        # when using multi-node (ddp) we need to add the  datasampler
-        train_sampler = None
-
-        batch_size_final = self.hparams.batch_size
         if self.hparams.batch_size > self.hparams.model_specific_batch_size_max:
             print(
                 f"The choosen batchsize is too large for this model."
@@ -363,12 +213,10 @@ class FeatureExtraction(LightningModule):
             )
             self.hparams.batch_size = self.hparams.model_specific_batch_size_max
 
-        if self.use_ddp:
-            train_sampler = DistributedSampler(dataset)
-
-        should_shuffle = train_sampler is None
         if split == "val" or split == "test":
             should_shuffle = False
+        else:
+            should_shuffle = True
         print(f"split: {split} - shuffle: {should_shuffle}")
         worker = self.hparams.num_workers
         if split == "test":
@@ -381,13 +229,11 @@ class FeatureExtraction(LightningModule):
             dataset=dataset,
             batch_size=self.hparams.batch_size,
             shuffle=should_shuffle,
-            sampler=train_sampler,
             num_workers=worker,
             pin_memory=True,
         )
         return loader
 
-    @pl.data_loader
     def train_dataloader(self):
         """
         Intialize train dataloader
@@ -398,7 +244,6 @@ class FeatureExtraction(LightningModule):
             len(dataloader.dataset)))
         return dataloader
 
-    @pl.data_loader
     def val_dataloader(self):
         """
         Initialize val loader
@@ -409,15 +254,12 @@ class FeatureExtraction(LightningModule):
             len(dataloader.dataset)))
         return dataloader
 
-    @pl.data_loader
+
     def test_dataloader(self):
-        """
-        Initialize test loader
-        :return: test loader
-        """
         dataloader = self.__dataloader(split="test")
         logging.info("test data loader called  - size: {}".format(
             len(dataloader.dataset)))
+        print(f"starting video idx for testing: {self.current_video_idx}")
         self.set_export_pickle_path()
         return dataloader
 

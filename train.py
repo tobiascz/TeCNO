@@ -4,7 +4,7 @@ import torch
 from pytorch_lightning.callbacks import ModelCheckpoint
 import logging
 from pytorch_lightning import Trainer
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 
 from utils.utils import (
     argparse_summary,
@@ -39,75 +39,36 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
     # 3 INIT TRAINER --> continues training
     # ------------------------
     checkpoint_callback = ModelCheckpoint(
-        filepath=f"{hparams.output_path}/checkpoints/{hparams.name}",
+        dirpath=f"{hparams.output_path}/checkpoints/",
         save_top_k=hparams.save_top_k,
         verbose=True,
         monitor=hparams.early_stopping_metric,
         mode='max',
-        prefix=hparams.name)
-    ### poly_logger has attribute with logging root for callback thingy for checkpoint
-    progress_bar_log_per_epoch = 5
-    biggest_data_split = max([len(dataset.data[k]) for k in dataset.data])
-    progress_bar_refresh_rate_unrounded = biggest_data_split // progress_bar_log_per_epoch
-    progress_bar_refresh_rate = round(
-        progress_bar_refresh_rate_unrounded,
-        -len(str(progress_bar_refresh_rate_unrounded)) + 1)
-    progress_bar_refresh_rate = 0
-
-    print(f"progress_bar_refresh_rate: {progress_bar_refresh_rate}")
+        prefix=hparams.name,
+        filename=f'{{epoch}}-{{{hparams.early_stopping_metric}:.2f}}'
+    )
 
     trainer = Trainer(
-        gpus="0",
+        gpus="0,1",
         logger=logger,
         fast_dev_run=hparams.fast_dev_run,
-        overfit_pct=hparams.overfit_pct,
         min_epochs=hparams.min_epochs,
         max_epochs=hparams.max_epochs,
-        train_percent_check=hparams.train_percent_check,
         checkpoint_callback=checkpoint_callback,
-        early_stop_callback=True,
-        gradient_clip_val=0,
-        process_position=0,
-        num_nodes=1,
-        log_gpu_memory=None,
-        progress_bar_refresh_rate=progress_bar_refresh_rate,
-        track_grad_norm=-1,
-        check_val_every_n_epoch=1,
-        accumulate_grad_batches=1,
-        val_percent_check=hparams.val_percent_check,
-        test_percent_check=hparams.test_percent_check,
-        val_check_interval=1.0,
-        log_save_interval=100,
-        row_log_interval=hparams.row_log_interval,
-        distributed_backend=None,
-        use_amp=False,
-        print_nan_grads=False,
         weights_summary='full',
-        weights_save_path=None,
-        amp_level='O1',
-        num_sanity_val_steps=hparams.num_sanity_val_steps,
-        truncated_bptt_steps=None,
-        #resume_from_checkpoint=hparams.resume_from_checkpoint,
-        resume_from_checkpoint=None,
+        num_sanity_val_steps=hparams.num_sanity_val_steps
     )
     # ------------------------
     # 4 START TRAINING
     # ------------------------
+
     trainer.fit(module)
     print(
-        f"Best: {checkpoint_callback.best} | monitor: {checkpoint_callback.monitor} | best_values: {checkpoint_callback.kth_value} | path: {checkpoint_callback.kth_best_model} |  "
+        f"Best: {checkpoint_callback.best_model_score} | monitor: {checkpoint_callback.monitor} | path: {checkpoint_callback.best_model_path}"
+        f"\nTesting..."
     )
+    trainer.test(ckpt_path='best')
 
-    if True:
-        print(f"LOADING BEST: {checkpoint_callback.kth_best_model}")
-        model_state_dict = module.model.state_dict()
-        w_state_dict = torch.load(
-            checkpoint_callback.kth_best_model)["state_dict"]
-        for a in model_state_dict:
-            model_state_dict[a] = w_state_dict["model." + a]
-        module.model.load_state_dict(model_state_dict)
-
-        trainer.test(module)
 
 
 if __name__ == "__main__":
@@ -155,8 +116,11 @@ if __name__ == "__main__":
     hparams.output_path = Path(hparams.output_path).absolute() / hparams.name
 
     tb_logger = TensorBoardLogger(hparams.output_path, name='tb')
+    wandb_logger = WandbLogger(name = hparams.name, project="tecno")
     print('Output path: ', hparams.output_path)
-    loggers = [tb_logger]
+    loggers = [tb_logger, wandb_logger]
+
+    #loggers = [tb_logger]
 
     argparse_summary(hparams, parser)
 
