@@ -116,11 +116,9 @@ if __name__ == "__main__":
     hparams.output_path = Path(hparams.output_path).absolute() / hparams.name
 
     tb_logger = TensorBoardLogger(hparams.output_path, name='tb')
-    wandb_logger = WandbLogger(name = hparams.name, project="tecno")
     print('Output path: ', hparams.output_path)
-    loggers = [tb_logger, wandb_logger]
 
-    #loggers = [tb_logger]
+    loggers = [tb_logger]
 
     argparse_summary(hparams, parser)
 
