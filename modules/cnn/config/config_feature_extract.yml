@@ -19,4 +19,5 @@ num_workers : 15
 num_tasks : 2
 num_sanity_val_steps : 4
 test_extract : True
+gpus : -1
 

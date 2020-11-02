@@ -49,7 +49,7 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
     )
 
     trainer = Trainer(
-        gpus="0,1",
+        gpus=hparams.gpus,
         logger=logger,
         fast_dev_run=hparams.fast_dev_run,
         min_epochs=hparams.min_epochs,
