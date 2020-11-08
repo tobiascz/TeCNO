@@ -15,9 +15,11 @@ pretrained : True
 save_top_k : 1
 max_epochs : 15 # 30
 min_epochs : 6 # 20
-num_workers : 15
 num_tasks : 2
 num_sanity_val_steps : 4
 test_extract : True
-gpus : -1
+#accelerator: ddp_spawn
+num_workers : 10
+gpus : 1 # all available -1
+#resume_from_checkpoint : logs/201103-000243_FeatureExtraction_Cholec80FeatureExtract_cnn_TwoHeadResNet50Model/checkpoints/201103-000243_FeatureExtraction_Cholec80FeatureExtract_cnn_TwoHeadResNet50Model-epoch=10-val_acc_phase=0.83.ckpt
 

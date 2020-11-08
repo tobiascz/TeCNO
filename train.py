@@ -1,7 +1,7 @@
 import configargparse
 from pathlib import Path
 import torch
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import logging
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
@@ -11,8 +11,8 @@ from utils.utils import (
     get_class_by_path,
 )
 from utils.configargparse_arguments import build_configargparser
-
 from datetime import datetime
+
 logging.disable(logging.WARNING)
 
 #SEED = 2334
@@ -47,14 +47,22 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
         prefix=hparams.name,
         filename=f'{{epoch}}-{{{hparams.early_stopping_metric}:.2f}}'
     )
+    early_stop_callback = EarlyStopping(
+        monitor=hparams.early_stopping_metric,
+        min_delta=0.00,
+        patience=3,
+        mode='max')
+
 
     trainer = Trainer(
-        gpus=hparams.gpus,
+        gpus=[1],
         logger=logger,
         fast_dev_run=hparams.fast_dev_run,
         min_epochs=hparams.min_epochs,
         max_epochs=hparams.max_epochs,
         checkpoint_callback=checkpoint_callback,
+        resume_from_checkpoint=hparams.resume_from_checkpoint,
+        callbacks=[early_stop_callback],
         weights_summary='full',
         num_sanity_val_steps=hparams.num_sanity_val_steps
     )
@@ -67,7 +75,7 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
         f"Best: {checkpoint_callback.best_model_score} | monitor: {checkpoint_callback.monitor} | path: {checkpoint_callback.best_model_path}"
         f"\nTesting..."
     )
-    trainer.test(ckpt_path='best')
+    trainer.test(ckpt_path=checkpoint_callback.best_model_path)
 
 
 
@@ -106,22 +114,22 @@ if __name__ == "__main__":
     #  PRINT PARAMS & INIT LOGGER
     # ------------------------
     hparams = parser.parse_args()
-    # seutp logging
-    exp_name = (hparams.module.split(".")[-1] + "_" +
-                hparams.dataset.split(".")[-1] + "_" +
-                hparams.model.replace(".", "_"))
+    # setup logging
 
+    exp_name = (hparams.module.split(".")[-1] + "_" + hparams.dataset.split(".")[-1] + "_" + hparams.model.replace(".",
+        "_"))
     date_str = datetime.now().strftime("%y%m%d-%H%M%S_")
     hparams.name = date_str + exp_name
     hparams.output_path = Path(hparams.output_path).absolute() / hparams.name
 
     tb_logger = TensorBoardLogger(hparams.output_path, name='tb')
-    print('Output path: ', hparams.output_path)
-
-    loggers = [tb_logger]
+    wandb_logger = WandbLogger(name = hparams.name, project="tecno")
 
     argparse_summary(hparams, parser)
+    print('Output path: ', hparams.output_path)
 
+
+    loggers = [tb_logger, wandb_logger]
     # ---------------------
     # RUN TRAINING
     # ---------------------

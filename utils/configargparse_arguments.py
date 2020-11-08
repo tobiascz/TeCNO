@@ -10,13 +10,13 @@ def build_configargparser(parser):
     # gpu args
     trainer_group.add_argument("--gpus",
                                type=int,
-                               default=1,
+                               default=0,
                                help="how many gpus / -1 means all")
     trainer_group.add_argument(
-        "--distributed_backend",
+        "--accelerator",
         type=str,
         default="ddp",
-        help="supports three options dp, ddp, ddp2",
+        help="supports four options dp, ddp, ddp_spawn, ddp2",
     )
 
     trainer_group.add_argument("--resume_from_checkpoint",
