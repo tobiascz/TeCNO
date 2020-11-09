@@ -10,6 +10,7 @@ def build_configargparser(parser):
     # gpu args
     trainer_group.add_argument("--gpus",
                                type=int,
+                               nargs='+',
                                default=0,
                                help="how many gpus / -1 means all")
     trainer_group.add_argument(

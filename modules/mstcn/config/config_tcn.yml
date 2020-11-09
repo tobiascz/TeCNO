@@ -5,19 +5,19 @@ out_features : 7
 num_workers : 3
 batch_size : 1
 features_per_seconds : 25
-features_subsampling : 10
+features_subsampling : 1
 log_every_n_steps : 1
 mstcn_causal_conv : True
 learning_rate : 0.00007
 min_epochs : 12
 max_epochs : 16
-mstcn_layers : 11
+mstcn_layers : 8
 mstcn_f_maps : 45
-mstcn_f_dim: 2048
+mstcn_f_dim: 1024
 mstcn_stages : 2
 early_stopping_metric : val_acc
 save_top_k : 1
-gpus : 1
+gpus : ['1']
 data_root : /home/tobiascz/Datasets/cholec80_pickle_export/cholec80_pickle_export
 num_sanity_val_steps: 0
 

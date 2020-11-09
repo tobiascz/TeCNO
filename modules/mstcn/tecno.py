@@ -177,15 +177,14 @@ class TeCNO(LightningModule):
 
     def __dataloader(self, split=None):
         dataset = self.dataset.data[split]
-        # when using multi-node (ddp) we need to add the  datasampler
-        train_sampler = None
-
-        if self.use_ddp:
-            train_sampler = DistributedSampler(dataset)
-
         should_shuffle = False
         if split == "train":
             should_shuffle = True
+        # when using multi-node (ddp) we need to add the  datasampler
+        train_sampler = None
+        if self.use_ddp:
+            train_sampler = DistributedSampler(dataset)
+            should_shuffle = False
         print(f"split: {split} - shuffle: {should_shuffle}")
         loader = DataLoader(
             dataset=dataset,
