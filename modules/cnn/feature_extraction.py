@@ -1,13 +1,9 @@
 import logging
-from collections import OrderedDict
 import torch
-import torch.nn.functional as F
 from torch import optim
-from torch.utils.data.distributed import DistributedSampler
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 from pytorch_lightning.core.lightning import LightningModule
-from pathlib import Path
 from torch import nn
 from pycm import ConfusionMatrix
 import numpy as np

@@ -22,6 +22,11 @@ def build_configargparser(parser):
     trainer_group.add_argument("--resume_from_checkpoint",
                                type=str,
                                default=None)
+
+    trainer_group.add_argument("--log_every_n_steps",
+                               type=int,
+                               default=50)
+
     # config module e.g. classification_multiclass
     module_group.add_argument("--module", type=str, required=True)
 

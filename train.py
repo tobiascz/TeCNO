@@ -1,6 +1,5 @@
 import configargparse
 from pathlib import Path
-import torch
 from pytorch_lightning.callbacks import ModelCheckpoint, EarlyStopping
 import logging
 from pytorch_lightning import Trainer
@@ -55,7 +54,7 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
 
 
     trainer = Trainer(
-        gpus=[1],
+        gpus=hparams.gpus,
         logger=logger,
         fast_dev_run=hparams.fast_dev_run,
         min_epochs=hparams.min_epochs,
@@ -64,7 +63,8 @@ def train(hparams, ModuleClass, ModelClass, DatasetClass, logger):
         resume_from_checkpoint=hparams.resume_from_checkpoint,
         callbacks=[early_stop_callback],
         weights_summary='full',
-        num_sanity_val_steps=hparams.num_sanity_val_steps
+        num_sanity_val_steps=hparams.num_sanity_val_steps,
+        log_every_n_steps=hparams.log_every_n_steps
     )
     # ------------------------
     # 4 START TRAINING
