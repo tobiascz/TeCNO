@@ -12,8 +12,8 @@ learning_rate : 0.00007
 min_epochs : 12
 max_epochs : 16
 mstcn_layers : 8
-mstcn_f_maps : 45
-mstcn_f_dim: 1024
+mstcn_f_maps : 32
+mstcn_f_dim: 2048
 mstcn_stages : 2
 early_stopping_metric : val_acc
 save_top_k : 1
