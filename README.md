@@ -20,7 +20,7 @@ Link to paper: [**TeCNO Paper**](https://arxiv.org/abs/2003.10751)
 
 
 <p align="center">
-     <img src="assets/abstract_tecno.png"
+     <img src="assets/abstract_tecno_transparent.png"
           alt="logo tecno"
           width=1000px />
 </p>
