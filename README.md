@@ -1,5 +1,5 @@
 # Table of Contents
-<img src="assets/tecno_logo_transparent.png"
+<img src="assets/TeCNO_logo_transparent.png"
      alt="logo tecno"
      width=150px
      style="margin-right:50px"
