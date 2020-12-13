@@ -1,5 +1,5 @@
 # Table of Contents
-<img src="assets/tecno_logo.png"
+<img src="assets/tecno_logo_transparent.png"
      alt="logo tecno"
      width=150px
      style="margin-right:50px"
@@ -20,7 +20,7 @@ Link to paper: [**TeCNO Paper**](https://arxiv.org/abs/2003.10751)
 
 
 <p align="center">
-     <img src="assets/abstract_tecno_transparent.png"
+     <img src="assets/abstract_tecno.png"
           alt="logo tecno"
           width=1000px />
 </p>
